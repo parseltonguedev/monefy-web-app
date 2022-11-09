@@ -7,14 +7,15 @@ from sanic import Request
 from sanic.exceptions import SanicException
 from sanic.log import LOGGING_CONFIG_DEFAULTS
 
-os.makedirs(name="logs", exist_ok=True)
 LOGGING_CONFIG_CUSTOM = LOGGING_CONFIG_DEFAULTS
-
 LOGGING_FORMAT = (
     "%(asctime)s - (%(name)s)[%(levelname)s][%(host)s]: "
     "%(request_id)s %(request)s %(message)s %(status)d %(byte)d"
 )
+LOG_FILE_PATH = "logs/monefy_app.log"
+LOG_CLASS = "logging.FileHandler"
 
+os.makedirs(name="logs", exist_ok=True)
 old_factory = logging.getLogRecordFactory()
 
 
@@ -38,19 +39,19 @@ logging.setLogRecordFactory(record_factory)
 LOGGING_CONFIG_CUSTOM["formatters"]["access"]["format"] = LOGGING_FORMAT
 
 LOGGING_CONFIG_CUSTOM["handlers"]["internalFile"] = {
-    "class": "logging.FileHandler",
+    "class": LOG_CLASS,
     "formatter": "generic",
-    "filename": "logs/monefy_app.log",
+    "filename": LOG_FILE_PATH,
 }
 LOGGING_CONFIG_CUSTOM["handlers"]["accessFile"] = {
-    "class": "logging.FileHandler",
+    "class": LOG_CLASS,
     "formatter": "access",
-    "filename": "logs/monefy_app.log",
+    "filename": LOG_FILE_PATH,
 }
 LOGGING_CONFIG_CUSTOM["handlers"]["errorFile"] = {
-    "class": "logging.FileHandler",
+    "class": LOG_CLASS,
     "formatter": "generic",
-    "filename": "logs/monefy_app.log",
+    "filename": LOG_FILE_PATH,
 }
 
 LOGGING_CONFIG_CUSTOM["loggers"]["sanic.root"]["handlers"].append("internalFile")

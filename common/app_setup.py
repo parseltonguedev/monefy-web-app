@@ -1,8 +1,8 @@
 """Module for additional configuration for application instance"""
 import os
-import sqlite3
 from typing import Any, AnyStr, Callable, Dict, Optional, Type
 
+import psycopg2
 from cryptography.fernet import Fernet
 from sanic import Sanic
 from sanic.config import SANIC_PREFIX, Config
@@ -11,15 +11,30 @@ from sanic.request import Request
 from sanic.router import Router
 from sanic.signals import SignalRouter
 
-from src.domain.dropbox_utils import DropboxAuthenticator
-from src.resources.monefy_service import (data_aggregation_bp,
-                                          dropbox_authentication_bp,
-                                          dropbox_webhook_bp, healthcheck_bp,
-                                          homepage_bp, monefy_info_bp)
+from aggregation_service.aggregation_resources import (
+    data_aggregation_bp,
+    dropbox_webhook_bp,
+)
+from common.dropbox_utils import DropboxAuthenticator
+from transactions_service.transactions_resources import transactions_bp
+from user_interface_service.user_interface_resources import (
+    dropbox_authentication_bp,
+    healthcheck_bp,
+    homepage_bp,
+    monefy_expense_bp,
+    monefy_income_bp,
+    monefy_info_bp,
+)
 
 
 class ApplicationLauncher(Sanic):
     """Application launcher class for additional configuration"""
+
+    secret = os.environ["SECRET"].encode()
+    __db_name = os.environ["POSTGRES_DB"]
+    __db_user = os.environ["POSTGRES_USER"]
+    __db_host = os.environ["POSTGRES_HOST"]
+    __db_password = os.environ["POSTGRES_PASSWORD"]
 
     def __init__(
         self,
@@ -62,47 +77,69 @@ class ApplicationLauncher(Sanic):
         """Method that adds or edit application configuration variables"""
         self.config.FALLBACK_ERROR_FORMAT = "text"
         self.config.CORS_ORIGINS = (
-            "http://localhost:8000"
+            "http://localhost:8000",
+            "http://localhost:8001",
+            "http://localhost:8002"
             if self.config.get("LOCAL")
             else "https://monefied.xyz"
         )
         self.config.ALLOWED_ORIGINS = [
             "http://localhost:8000",
+            "http://localhost:8001",
+            "http://localhost:8002",
             "https://monefied.xyz",
             "https://www.dropbox.com/",
         ]
-        self.config.SECRET = Fernet.generate_key()
+        self.config.SECRET = self.secret
 
     def setup_app_context(self) -> None:
         """Method that attach properties and data to ctx object"""
-        db_path = f"{os.getcwd()}/monefy.db"
         self.ctx.dropbox_authenticator = DropboxAuthenticator()
-        self.ctx.sqlite_connection = sqlite3.connect(db_path)
-        self.ctx.sqlite_cursor = self.ctx.sqlite_connection.cursor()
-        self.ctx.token_cryptography = Fernet(Fernet.generate_key())
+        self.ctx.sqlite_connection = psycopg2.connect(
+            f"dbname='{self.__db_name}'"
+            f" user='{self.__db_user}'"
+            f" host='{self.__db_host}'"
+            f" password='{self.__db_password}'"
+        )
+        self.ctx.token_cryptography = Fernet(self.secret)
 
-        self.ctx.sqlite_cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            uuid TEXT,
-            account_id TEXT,
-            access_token TEXT,
-            username TEXT,
-            photo TEXT
-        )
-            """
-        )
+        with self.ctx.sqlite_connection as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                uuid TEXT,
+                account_id TEXT,
+                access_token TEXT,
+                username TEXT,
+                photo TEXT
+            )
+                """
+                )
 
     def setup_app_blueprints(self) -> None:
         """Method that adds existed blueprints to application"""
-        app_blueprints = (
-            homepage_bp,
-            monefy_info_bp,
-            data_aggregation_bp,
+        user_interface_blueprints = (
             healthcheck_bp,
-            dropbox_webhook_bp,
+            homepage_bp,
             dropbox_authentication_bp,
+            monefy_info_bp,
+            monefy_expense_bp,
+            monefy_income_bp,
         )
-        for app_blueprint in app_blueprints:
-            self.blueprint(app_blueprint)
+        transactions_blueprints = (transactions_bp,)
+        aggregation_blueprints = (
+            data_aggregation_bp,
+            dropbox_webhook_bp,
+        )
+
+        if self.name == "Monefy-Web-App":
+            for service_blueprint in user_interface_blueprints:
+                self.blueprint(service_blueprint)
+        if self.name == "Transactions-Service":
+            for service_blueprint in transactions_blueprints:
+                self.blueprint(service_blueprint)
+        if self.name == "Aggregation-Service":
+            for service_blueprint in aggregation_blueprints:
+                self.blueprint(service_blueprint)

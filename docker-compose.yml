@@ -1,0 +1,105 @@
+version: "3"
+
+services:
+
+  monefy_app_db:
+    image: postgres:15.0-alpine
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./.postgres-data:/var/lib/postgresql/data
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+
+  ui_service:
+    build:
+      context: ../monefy-web-app
+      dockerfile: Dockerfile
+    command: sanic user_interface_service.user_interface_server:user_interface_service --host=0.0.0.0 --port=8000 --dev
+    volumes:
+      - ./:/app
+    ports:
+      - "8000:8000"
+    restart: always
+    depends_on:
+      - monefy_app_db
+    environment:
+      - DROPBOX_PATH=${DROPBOX_PATH}
+      - DROPBOX_APP_SECRET=${DROPBOX_APP_SECRET}
+      - DROPBOX_APP_KEY=${DROPBOX_APP_KEY}
+      - SANIC_LOCAL=${SANIC_LOCAL}
+      - SECRET=${SECRET}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+
+  transactions_service:
+    build:
+      context: ../monefy-web-app
+      dockerfile: Dockerfile
+    command: sanic transactions_service.transactions_server:transactions_service --host=0.0.0.0 --port=8000 --dev
+    volumes:
+      - ./:/app
+    ports:
+      - "8001:8000"
+    restart: always
+    depends_on:
+      - monefy_app_db
+      - ui_service
+    environment:
+      - DROPBOX_PATH=${DROPBOX_PATH}
+      - DROPBOX_APP_SECRET=${DROPBOX_APP_SECRET}
+      - DROPBOX_APP_KEY=${DROPBOX_APP_KEY}
+      - SANIC_LOCAL=${SANIC_LOCAL}
+      - SECRET=${SECRET}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+
+
+  aggregation_service:
+    build:
+      context: ../monefy-web-app
+      dockerfile: Dockerfile
+    command: sanic aggregation_service.aggregation_server:aggregation_service --host=0.0.0.0 --port=8000 --dev
+    ports:
+      - "8002:8000"
+    restart: always
+    volumes:
+      - ./:/app
+    depends_on:
+      - monefy_app_db
+      - ui_service
+    environment:
+      - DROPBOX_PATH=${DROPBOX_PATH}
+      - DROPBOX_APP_SECRET=${DROPBOX_APP_SECRET}
+      - DROPBOX_APP_KEY=${DROPBOX_APP_KEY}
+      - SANIC_LOCAL=${SANIC_LOCAL}
+      - SECRET=${SECRET}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+
+  nginx_server:
+    image: nginx:1.23.2-alpine
+    ports:
+      - "80:80"
+      - "433:433"
+    volumes:
+      - ./nginx/monefied.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+    depends_on:
+      - ui_service
+      - transactions_service
+      - aggregation_service
+
+
+networks:
+  default:
+    driver: bridge

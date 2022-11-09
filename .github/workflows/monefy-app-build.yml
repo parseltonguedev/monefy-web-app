@@ -39,7 +39,7 @@ jobs:
         export DROPBOX_APP_SECRET=${{ env.DROPBOX_APP_SECRET }}
     - name: Lint with pylint
       run: |
-        pylint run.py src/
+        pylint aggregation_service/ common/ transactions_service/ user_interface_service/
 #    - name: Test with pytest
 #      run: |
 #        pytest --cov . --cov-report xml:/home/runner/coverage.xml

@@ -8,21 +8,25 @@ from datetime import datetime
 from io import StringIO
 
 from dropbox import Dropbox, DropboxOAuth2Flow
-from dropbox.oauth import (BadRequestException, BadStateException,
-                           CsrfException, NotApprovedException,
-                           ProviderException)
+from dropbox.oauth import (
+    BadRequestException,
+    BadStateException,
+    CsrfException,
+    NotApprovedException,
+    ProviderException,
+)
 from dropbox.users import FullAccount
 from sanic.exceptions import NotFound
 from sanic.log import logger
 
-from src.common.utils import get_monefied_app
+from common.utils import get_monefied_app
 
 
 @dataclass
 class DropboxUser:
     """Dropbox User info dataclass"""
 
-    user_uuid = str(uuid.uuid4())
+    user_uuid: str
     account_type: str
     user_country: str
     user_email: str | None
@@ -45,6 +49,7 @@ class DropboxUser:
     def set_user_info(self) -> None:
         """Method that format Dropbox user response string to dataclass"""
 
+        self.user_uuid = str(uuid.uuid4())
         if self.dropbox_user_info.account_type.is_basic():
             self.account_type = "basic"
         elif self.dropbox_user_info.account_type.is_business():
@@ -195,7 +200,7 @@ class DropboxAuthenticator:
     app_key = os.environ.get("DROPBOX_APP_KEY")
     app_secret = os.environ.get("DROPBOX_APP_SECRET")
     app_uri = (
-        "http://127.0.0.1:8000/auth"
+        "http://127.0.0.1/auth"
         if os.environ.get("SANIC_LOCAL")
         else "https://monefied.xyz/auth"
     )

@@ -1,24 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Info{% endblock %}
+{% block title %}Chart{% endblock %}
 
 {% block content %}
-<h1>Your latest Monefy Backup file transactions</h1>
+<h1>Monefy income chart</h1>
 <br>
 <a href="{{ '/' }}">Back to homepage</a>
-<br>
-<br>
-
-<br>
-    <py-env>
-        - pandas
-    </py-env>
-    <py-script>
+<py-env>
+    - pandas
+    - matplotlib
+</py-env>
+<py-script>
 from pyodide.http import pyfetch, FetchResponse
 from typing import Optional, Any
 import asyncio  # important!!
 import json
 import pandas as pd
-import os
+import matplotlib
 
 baseurl = "http://127.0.0.1/"
 
@@ -46,14 +43,20 @@ async def request(url: str, method: str = "GET", body: Optional[str] = None,
     response = await pyfetch(url, **kwargs)
     return response
 
+
 headers = {"Content-type": "application/json"}
 response = await request(baseurl+"history", method="GET", headers=headers)
 response = await response.json()
 monefy_data = response["monefy_data"]
 
-df = pd.DataFrame.from_records(monefy_data)
-df
+df = pd.DataFrame.from_records(monefy_data).set_index("category")
+df["date"] = pd.to_datetime(df["date"])
+df['amount'] = df['amount'].astype(float)
+df = df.groupby(["category"]).agg({"amount": sum})
+df = df[df["amount"] > 0]
+df['amount'] = df['amount'].abs()
+income_plot = df.plot.pie(y='amount', figsize=(12,12), title="Income pie chart", autopct='%1.1f%%', legend=False)
+income_plot.figure
 
-    </py-script>
-
+</py-script>
 {% endblock %}

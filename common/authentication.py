@@ -30,8 +30,9 @@ When this is complete - we now have the ability to issue tokens from JWT
 These tokens will provide access to the app, both directly to the API
 using an Authorization header and through secure cookies
 """
+from datetime import datetime
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import jwt
 from dropbox.oauth import OAuth2FlowResult
@@ -41,9 +42,8 @@ from sanic.request import Request
 from sanic.response import HTTPResponse, redirect
 from sanic_ext import render
 
-from src.common.cookies import set_cookie
-from src.common.utils import get_monefied_app
-from src.domain.dropbox_utils import DropboxClient, DropboxUser
+from common.dropbox_utils import DropboxClient, DropboxUser
+from common.utils import get_monefied_app
 
 
 class Authenticator:
@@ -82,6 +82,7 @@ class Authenticator:
                     auth_query_parameters
                 )
             )
+            logger.info("got user info for auth")
             return await self.get_authenticated_response(request, auth_user_info)
         logger.warning("get dropbox authentication route without required parameters")
         return redirect("/")
@@ -135,12 +136,17 @@ class Authenticator:
         monefied_app = get_monefied_app()
 
         account_id = user_info["account_id"]
-        existed_user_info = monefied_app.ctx.sqlite_cursor.execute(
-            f"""
-            SELECT * FROM users
-            WHERE account_id = '{account_id}'
-            """
-        ).fetchone()
+
+        with monefied_app.ctx.sqlite_connection as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT * FROM users
+                    WHERE account_id = '{account_id}'
+                    """
+                )
+                existed_user_info = cursor.fetchone()
+
         return existed_user_info
 
     @staticmethod
@@ -173,8 +179,10 @@ class Authenticator:
 
         logger.info("create new user in db")
 
-        monefied_app.ctx.sqlite_cursor.execute(
-            f"""
+        with monefied_app.ctx.sqlite_connection as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
                     INSERT INTO users (uuid, account_id, access_token, username, photo)
                     VALUES (
                         '{dropbox_user_information.user_uuid}',
@@ -184,8 +192,7 @@ class Authenticator:
                         '{dropbox_user_information.user_profile_photo_url}'
                     )
                     """
-        )
-        monefied_app.ctx.sqlite_connection.commit()
+                )
 
     @staticmethod
     def update_user(authentication_info: dict[Any, Any]) -> None:
@@ -193,14 +200,16 @@ class Authenticator:
         monefied_app = get_monefied_app()
 
         logger.info("update user info in db")
-        monefied_app.ctx.sqlite_cursor.execute(
-            f"""
+
+        with monefied_app.ctx.sqlite_connection as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
                     UPDATE users
                     SET access_token = '{authentication_info["access_token"]}'
                     WHERE account_id = '{authentication_info["account_id"]}';
                     """
-        )
-        monefied_app.ctx.sqlite_connection.commit()
+                )
 
     @staticmethod
     async def render_authenticated_response(
@@ -233,12 +242,17 @@ class Authenticator:
         if new_access_token:
             return DropboxClient(new_access_token)
         jwt_data = self.get_decoded_jwt_token(request)
-        user_access_token = monefied_app.ctx.sqlite_cursor.execute(
-            f"""
-                    SELECT access_token FROM users
-                    WHERE uuid = '{jwt_data["user_uuid"]}'
-                    """
-        ).fetchone()[0]
+
+        with monefied_app.ctx.sqlite_connection as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                                SELECT access_token FROM users
+                                WHERE uuid = '{jwt_data["user_uuid"]}'
+                                """
+                )
+                user_access_token = cursor.fetchone()[0]
+
         return DropboxClient(user_access_token)
 
     @staticmethod
@@ -260,7 +274,10 @@ class Authenticator:
         if request.cookies.get("jwt_token"):
             try:
                 dp_client = self.get_user_dropbox_client(request)
-            except Unauthorized:
+            except (Unauthorized, TypeError) as authorization_error:
+                logger.error(
+                    f"Unexpected authorization error, delete user cookie {authorization_error}"
+                )
                 response = redirect("/")
                 del response.cookies["jwt_token"]
                 return response
@@ -307,6 +324,7 @@ def require_jwt_authentication(
 ) -> Callable[[Any, Any, Any], Any]:
     """Decorator for application views
     that check if user authenticated"""
+    logger.info("checking jwt token in request")
 
     def authentication_wrapper(
         route: Callable[[Any, Any, Any], Any]
@@ -324,3 +342,27 @@ def require_jwt_authentication(
         return check_user_authentication
 
     return authentication_wrapper(wrapped)
+
+
+def set_cookie(
+    response: HTTPResponse,
+    key: str,
+    value: Any,
+    httponly: bool = False,
+    secure: bool = True,
+    samesite: str = "lax",
+    domain: Optional[str] = None,
+    expires: Optional[datetime] = None,
+) -> None:
+    """Function that setup cookie"""
+    response.cookies[key] = value
+    response.cookies[key]["httponly"] = httponly
+    response.cookies[key]["path"] = "/"
+    response.cookies[key]["secure"] = secure
+    response.cookies[key]["samesite"] = samesite
+
+    if domain:
+        response.cookies[key]["domain"] = domain
+
+    if expires:
+        response.cookies[key]["expires"] = expires

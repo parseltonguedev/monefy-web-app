@@ -1,15 +1,15 @@
 """Data aggregation module for summarizing or return detailed transaction of Monefy Data"""
 import csv
-import datetime
 import json
 import os
+from datetime import datetime
 from decimal import Decimal
 
 from sanic.log import logger
 
-from src.common.http_codes import NotAcceptable
-from src.domain.dropbox_utils import DropboxClient
-from src.common.utils import DecimalEncoder
+from common.dropbox_utils import DropboxClient
+from common.http_codes import NotAcceptable
+from common.utils import DecimalEncoder
 
 
 class MonefyDataAggregator:
@@ -31,7 +31,7 @@ class MonefyDataAggregator:
         self.summarize_balance = summarize_balance
 
     def _write_json_file(
-        self, file_name: str, json_object: list[dict[str, str]] | dict[str, int]
+        self, file_name: str, json_object: list[dict[str, str]] | dict[str, Decimal]
     ) -> str:
         """Method for writing json files. Can accept file name and json_data as parameters"""
         os.makedirs(self.json_directory_path, exist_ok=True)
@@ -42,10 +42,11 @@ class MonefyDataAggregator:
         return json_file_path
 
     def _write_csv_file(
-        self, file_name: str, json_object: list[dict[str, str]] | dict[str, int]
+        self, file_name: str, json_object: list[dict[str, str]] | dict[str, Decimal]
     ) -> str:
         """Method for writing csv files from json.
         Accept file name and json like object as parameters"""
+        os.makedirs(self.csv_directory_path, exist_ok=True)
         csv_file_path = os.path.join(self.csv_directory_path, f"{file_name}.csv")
         with open(csv_file_path, "w", newline="", encoding="utf-8-sig") as monefy_file:
             if isinstance(json_object, dict):
@@ -63,7 +64,7 @@ class MonefyDataAggregator:
         Method for writing files from json with provided format.
         Accept file name, json like object and file format as parameters"""
         logger.info(f"writing {self.result_file_format} file")
-        file_name = f"monefy-{datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}"
+        file_name = f"monefy-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
         if self.result_file_format == "csv" and self.summarize_balance:
             summarized_data = self.summarize_data(json_data)
             return self._write_csv_file(f"summarized_{file_name}", summarized_data)
@@ -88,13 +89,13 @@ class MonefyDataAggregator:
         return result_file_data
 
     @staticmethod
-    def summarize_data(transactions_list: list[dict[str, str]]) -> dict[str, int]:
+    def summarize_data(transactions_list: list[dict[str, str]]) -> dict[str, Decimal]:
         """Method that summarize detailed income and spending's from provided Monefy data"""
         logger.info("summarizing monefy data")
         summarized_data = {
-            "income": 0,
-            "expense": 0,
-            "balance": 0
+            "income": Decimal(0),
+            "expense": Decimal(0),
+            "balance": Decimal(0),
         }
         for transaction in transactions_list:
 
@@ -104,8 +105,10 @@ class MonefyDataAggregator:
                 summarized_data["income"] += Decimal(transaction["amount"])
 
             if transaction["category"] not in summarized_data:
-                summarized_data[transaction["category"]] = 0
+                summarized_data[transaction["category"]] = Decimal(0)
             summarized_data[transaction["category"]] += Decimal(transaction["amount"])
 
-            summarized_data["balance"] = summarized_data["income"] + summarized_data["expense"]
+            summarized_data["balance"] = (
+                summarized_data["income"] + summarized_data["expense"]
+            )
         return summarized_data
