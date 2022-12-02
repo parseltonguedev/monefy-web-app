@@ -1,21 +1,26 @@
 """Module for additional configuration for application instance"""
 import os
+from asyncio import AbstractEventLoop
+from contextvars import ContextVar
 from typing import Any, AnyStr, Callable, Dict, Optional, Type
 
-import psycopg2
 from cryptography.fernet import Fernet
 from sanic import Sanic
 from sanic.config import SANIC_PREFIX, Config
 from sanic.handlers import ErrorHandler
 from sanic.request import Request
+from sanic.response import BaseHTTPResponse
 from sanic.router import Router
 from sanic.signals import SignalRouter
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
 from aggregation_service.aggregation_resources import (
     data_aggregation_bp,
     dropbox_webhook_bp,
 )
 from common.dropbox_utils import DropboxAuthenticator
+from common.models import Base
 from transactions_service.transactions_resources import transactions_bp
 from user_interface_service.user_interface_resources import (
     dropbox_authentication_bp,
@@ -30,11 +35,8 @@ from user_interface_service.user_interface_resources import (
 class ApplicationLauncher(Sanic):
     """Application launcher class for additional configuration"""
 
-    secret = os.environ["SECRET"].encode()
-    __db_name = os.environ["POSTGRES_DB"]
-    __db_user = os.environ["POSTGRES_USER"]
-    __db_host = os.environ["POSTGRES_HOST"]
-    __db_password = os.environ["POSTGRES_PASSWORD"]
+    secret: bytes = os.environ["SECRET"].encode()
+    __db_connection_string: str = os.environ["DB_CONNECTION_STRING"]
 
     def __init__(
         self,
@@ -72,6 +74,7 @@ class ApplicationLauncher(Sanic):
         self.setup_app_config()
         self.setup_app_context()
         self.setup_app_blueprints()
+        self.create_db()
 
     def setup_app_config(self) -> None:
         """Method that adds or edit application configuration variables"""
@@ -81,7 +84,7 @@ class ApplicationLauncher(Sanic):
             "http://localhost:8001",
             "http://localhost:8002"
             if self.config.get("LOCAL")
-            else "https://monefied.xyz"
+            else "https://monefied.xyz",
         )
         self.config.ALLOWED_ORIGINS = [
             "http://localhost:8000",
@@ -91,32 +94,12 @@ class ApplicationLauncher(Sanic):
             "https://www.dropbox.com/",
         ]
         self.config.SECRET = self.secret
+        self.config.FORWARDED_SECRET = self.secret.decode()
 
     def setup_app_context(self) -> None:
         """Method that attach properties and data to ctx object"""
         self.ctx.dropbox_authenticator = DropboxAuthenticator()
-        self.ctx.sqlite_connection = psycopg2.connect(
-            f"dbname='{self.__db_name}'"
-            f" user='{self.__db_user}'"
-            f" host='{self.__db_host}'"
-            f" password='{self.__db_password}'"
-        )
         self.ctx.token_cryptography = Fernet(self.secret)
-
-        with self.ctx.sqlite_connection as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                uuid TEXT,
-                account_id TEXT,
-                access_token TEXT,
-                username TEXT,
-                photo TEXT
-            )
-                """
-                )
 
     def setup_app_blueprints(self) -> None:
         """Method that adds existed blueprints to application"""
@@ -143,3 +126,36 @@ class ApplicationLauncher(Sanic):
         if self.name == "Aggregation-Service":
             for service_blueprint in aggregation_blueprints:
                 self.blueprint(service_blueprint)
+
+    def _create_async_engine(self) -> AsyncEngine:
+        return create_async_engine(self.__db_connection_string, echo=True)
+
+    def create_db(self) -> None:
+        """Method for configuration application database"""
+
+        engine = self._create_async_engine()
+
+        async def create_tables(app: Sanic, loop: AbstractEventLoop) -> None:
+
+            async with engine.begin() as connection:
+                await connection.run_sync(Base.metadata.drop_all)
+                await connection.run_sync(Base.metadata.create_all)
+
+        self.register_listener(create_tables, "before_server_start")
+
+        async def inject_session(request: Request) -> None:
+            request.ctx.session = _sessionmaker()
+            request.ctx.session_ctx_token = _base_model_session_ctx.set(
+                request.ctx.session
+            )
+
+        async def close_session(request: Request, response: BaseHTTPResponse) -> None:
+            if hasattr(request.ctx, "session_ctx_token"):
+                _base_model_session_ctx.reset(request.ctx.session_ctx_token)
+                await request.ctx.session.close()
+
+        _sessionmaker = sessionmaker(engine, AsyncSession, expire_on_commit=False)
+        _base_model_session_ctx: ContextVar[str] = ContextVar("session")
+
+        self.register_middleware(inject_session, "request")
+        self.register_middleware(close_session, "response")

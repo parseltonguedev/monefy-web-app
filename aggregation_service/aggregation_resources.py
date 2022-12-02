@@ -10,10 +10,12 @@ from sanic.log import logger
 from sanic.request import Request
 from sanic.response import HTTPResponse, file, json, text
 from sanic.views import HTTPMethodView
+from sqlalchemy import select
 
 from aggregation_service.data_aggregator import MonefyDataAggregator
 from common.authentication import DropboxClient, require_jwt_authentication
 from common.http_codes import NotAcceptable
+from common.models import User
 from user_interface_service.user_interface_resources import MonefyApplicationView
 
 data_aggregation_bp = Blueprint("data_aggregation_bp")
@@ -29,7 +31,7 @@ class MonefyDataAggregatorView(
 
     async def get(self, request: Request) -> HTTPResponse:
         """Return Monefy file with spending's in json/csv format"""
-        dp_client = self.authenticator.get_user_dropbox_client(request)
+        dp_client = await self.authenticator.get_user_dropbox_client(request)
         summarize_file = request.args.get("summarized", "").lower() == "true"
         file_format = request.args.get("format", "").lower()
 
@@ -98,12 +100,15 @@ class DropboxWebhook(HTTPMethodView, attach=dropbox_webhook_bp, uri="/dropbox-we
                 # actual work in a separate thread. For more robustness, it's a
                 # good idea to add the work to a reliable queue and process the queue
                 # in a worker process.
-                user_access_token = request.app.ctx.sqlite_cursor.execute(
-                    f"""
-                                SELECT access_token FROM users
-                                WHERE account_id = '{account}'
-                                """
-                ).fetchone()[0]
+                session = request.ctx.session
+                async with session.begin():
+                    get_user_access_token = select(User).where(
+                        User.account_id == account
+                    )
+                    user_access_token = await session.execute(
+                        get_user_access_token
+                    ).scalar()
+
                 dp_client = DropboxClient(user_access_token)
                 data_aggregator = MonefyDataAggregator(dp_client, "csv", True)
                 result_file = data_aggregator.get_result_file_data()

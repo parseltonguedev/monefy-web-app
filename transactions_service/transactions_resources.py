@@ -18,6 +18,6 @@ class MonefyInfo(MonefyApplicationView, attach=transactions_bp, uri="/history"):
     async def get(self, request: Request) -> HTTPResponse:
         """Returns JSON formatted monefy transactions from csv files"""
         logger.info("getting monefy transactions")
-        dp_client = self.authenticator.get_user_dropbox_client(request)
+        dp_client = await self.authenticator.get_user_dropbox_client(request)
         monefy_stats = dp_client.get_monefy_info()
         return json(body={"monefy_data": monefy_stats})
