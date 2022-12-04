@@ -14,6 +14,7 @@ from sanic.router import Router
 from sanic.signals import SignalRouter
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sanic.worker.manager import WorkerManager
 
 from aggregation_service.aggregation_resources import (
     data_aggregation_bp,
@@ -30,6 +31,8 @@ from user_interface_service.user_interface_resources import (
     monefy_income_bp,
     monefy_info_bp,
 )
+
+WorkerManager.THRESHOLD = 600
 
 
 class ApplicationLauncher(Sanic):
@@ -138,7 +141,6 @@ class ApplicationLauncher(Sanic):
         async def create_tables(app: Sanic, loop: AbstractEventLoop) -> None:
 
             async with engine.begin() as connection:
-                await connection.run_sync(Base.metadata.drop_all)
                 await connection.run_sync(Base.metadata.create_all)
 
         self.register_listener(create_tables, "before_server_start")

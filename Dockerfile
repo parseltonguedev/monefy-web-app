@@ -3,7 +3,7 @@
 FROM python:3.10-slim-buster
 WORKDIR /app
 
-EXPOSE 8000
+EXPOSE 8000 8001 8002
 
 COPY . .
 RUN python -m venv env
