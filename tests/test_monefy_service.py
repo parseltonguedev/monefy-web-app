@@ -2,7 +2,7 @@
 import hmac
 from hashlib import sha256
 
-from src.resources import monefy_service
+from user_interface_service.resources import monefy_service
 from tests.conftest import MockDropbox404Error, MockDropboxClient
 
 

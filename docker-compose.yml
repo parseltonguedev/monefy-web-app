@@ -1,0 +1,92 @@
+version: "3"
+
+services:
+
+  monefy_app_db:
+    image: postgres:15.0-alpine
+    ports:
+      - "5432:5432"
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+
+  ui_service:
+    image: parseltongue/ui-service:latest
+    build:
+      context: ../monefy-web-app
+      dockerfile: Dockerfile
+    command: sanic user_interface_service.user_interface_server:user_interface_service --host=0.0.0.0 --port=8000 --dev
+    ports:
+      - "8000:8000"
+    restart: always
+    depends_on:
+      - monefy_app_db
+    environment:
+      - DROPBOX_PATH=${DROPBOX_PATH}
+      - DROPBOX_APP_SECRET=${DROPBOX_APP_SECRET}
+      - DROPBOX_APP_KEY=${DROPBOX_APP_KEY}
+      - SECRET=${SECRET}
+      - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+      - SANIC_LOCAL=${SANIC_LOCAL}
+
+  transactions_service:
+    image: parseltongue/transactions-service-service:latest
+    build:
+      context: ../monefy-web-app
+      dockerfile: Dockerfile
+    command: sanic transactions_service.transactions_server:transactions_service --host=0.0.0.0 --port=8001 --dev
+    ports:
+      - "8001:8001"
+    restart: always
+    depends_on:
+      - monefy_app_db
+      - ui_service
+    environment:
+      - DROPBOX_PATH=${DROPBOX_PATH}
+      - DROPBOX_APP_SECRET=${DROPBOX_APP_SECRET}
+      - DROPBOX_APP_KEY=${DROPBOX_APP_KEY}
+      - SECRET=${SECRET}
+      - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+      - SANIC_LOCAL=${SANIC_LOCAL}
+
+
+  aggregation_service:
+    image: parseltongue/aggregation-service:latest
+    build:
+      context: ../monefy-web-app
+      dockerfile: Dockerfile
+    command: sanic aggregation_service.aggregation_server:aggregation_service --host=0.0.0.0 --port=8002 --dev
+    ports:
+      - "8002:8002"
+    restart: always
+    depends_on:
+      - monefy_app_db
+      - ui_service
+    environment:
+      - DROPBOX_PATH=${DROPBOX_PATH}
+      - DROPBOX_APP_SECRET=${DROPBOX_APP_SECRET}
+      - DROPBOX_APP_KEY=${DROPBOX_APP_KEY}
+      - SECRET=${SECRET}
+      - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+      - SANIC_LOCAL=${SANIC_LOCAL}
+
+  nginx_server:
+    image: parseltongue/entrypoint-service:latest
+    build:
+      context: nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "433:433"
+    restart: always
+    depends_on:
+      - ui_service
+      - transactions_service
+      - aggregation_service
+
+
+networks:
+  default:
+    driver: bridge
