@@ -2,8 +2,8 @@
 import hmac
 from hashlib import sha256
 
-from tests.conftest import MockDropbox404Error, MockDropboxClient
 from user_interface_service.resources import monefy_service
+from tests.conftest import MockDropbox404Error, MockDropboxClient
 
 
 def test_healthcheck(monefy_app):
