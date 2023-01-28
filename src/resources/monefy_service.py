@@ -4,12 +4,12 @@ import os
 from hashlib import sha256
 from http import HTTPStatus
 
+from config import NotAcceptable
 from sanic.exceptions import Forbidden, NotFound
 from sanic.log import logger
 from sanic.response import HTTPResponse, file, json, text
 from sanic.views import HTTPMethodView
 
-from config import NotAcceptable
 from src.domain.data_aggregator import MonefyDataAggregator
 from src.domain.dropbox_utils import DropboxClient
 

@@ -12,25 +12,19 @@ from sanic.request import Request
 from sanic.response import BaseHTTPResponse
 from sanic.router import Router
 from sanic.signals import SignalRouter
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
 from sanic.worker.manager import WorkerManager
+from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
+                                    create_async_engine)
+from sqlalchemy.orm import sessionmaker
 
-from aggregation_service.aggregation_resources import (
-    data_aggregation_bp,
-    dropbox_webhook_bp,
-)
+from aggregation_service.aggregation_resources import (data_aggregation_bp,
+                                                       dropbox_webhook_bp)
 from common.dropbox_utils import DropboxAuthenticator
 from common.models import Base
 from transactions_service.transactions_resources import transactions_bp
 from user_interface_service.user_interface_resources import (
-    dropbox_authentication_bp,
-    healthcheck_bp,
-    homepage_bp,
-    monefy_expense_bp,
-    monefy_income_bp,
-    monefy_info_bp,
-)
+    dropbox_authentication_bp, healthcheck_bp, homepage_bp, monefy_expense_bp,
+    monefy_income_bp, monefy_info_bp)
 
 WorkerManager.THRESHOLD = 600
 

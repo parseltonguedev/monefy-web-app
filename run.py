@@ -1,15 +1,11 @@
 """Monefy-web-app - analyze and visualize data from Monefy App
  that will be parsed from csv formatted backup created in Monefy mobile application"""
 import click
+from config import LOGGING_CONFIG_CUSTOM
 from sanic import Blueprint, Sanic
 
-from config import LOGGING_CONFIG_CUSTOM
-from src.resources.monefy_service import (
-    DropboxWebhook,
-    HealthCheck,
-    MonefyDataAggregatorView,
-    MonefyInfo,
-)
+from src.resources.monefy_service import (DropboxWebhook, HealthCheck,
+                                          MonefyDataAggregatorView, MonefyInfo)
 
 app = Sanic("Monefy-parser", log_config=LOGGING_CONFIG_CUSTOM)
 

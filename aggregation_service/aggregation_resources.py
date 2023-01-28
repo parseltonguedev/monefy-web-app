@@ -16,7 +16,8 @@ from aggregation_service.data_aggregator import MonefyDataAggregator
 from common.authentication import DropboxClient, require_jwt_authentication
 from common.http_codes import NotAcceptable
 from common.models import User
-from user_interface_service.user_interface_resources import MonefyApplicationView
+from user_interface_service.user_interface_resources import \
+    MonefyApplicationView
 
 data_aggregation_bp = Blueprint("data_aggregation_bp")
 dropbox_webhook_bp = Blueprint("dropbox_webhook_bp")

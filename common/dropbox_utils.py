@@ -8,13 +8,9 @@ from datetime import datetime
 from io import StringIO
 
 from dropbox import Dropbox, DropboxOAuth2Flow
-from dropbox.oauth import (
-    BadRequestException,
-    BadStateException,
-    CsrfException,
-    NotApprovedException,
-    ProviderException,
-)
+from dropbox.oauth import (BadRequestException, BadStateException,
+                           CsrfException, NotApprovedException,
+                           ProviderException)
 from dropbox.users import FullAccount
 from sanic.exceptions import NotFound
 from sanic.log import logger
