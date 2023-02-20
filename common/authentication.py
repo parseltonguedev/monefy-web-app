@@ -213,28 +213,16 @@ class Authenticator:
     ) -> HTTPResponse:
         """Render response after authentication"""
         response = redirect("/", status=HTTPStatus.SEE_OTHER)
-        response.cookies["jwt_token"] = jwt_token
-        response.cookies["jwt_token"]["httponly"] = True
-        response.cookies["jwt_token"]["path"] = "/"
-        response.cookies["jwt_token"]["secure"] = True
-        response.cookies["jwt_token"]["samesite"] = "strict"
-
-        if "127.0.0.1":
-            response.cookies["jwt_token"]["domain"] = "127.0.0.1"
-
-        if authentication_info["expires_at"]:
-            response.cookies["jwt_token"]["expires"] = authentication_info["expires_at"]
-
-        # set_cookie(
-        #     response=response,
-        #     domain="127.0.0.1" if request.app.config.get("LOCAL") else "monefied.xyz",
-        #     key="jwt_token",
-        #     value=jwt_token,
-        #     httponly=True,
-        #     samesite="strict",
-        #     secure=True,
-        #     expires=authentication_info["expires_at"],
-        # )
+        set_cookie(
+            response=response,
+            domain="127.0.0.1" if request.app.config.get("LOCAL") else "monefied.xyz",
+            key="jwt_token",
+            value=jwt_token,
+            httponly=True,
+            samesite="lax",
+            secure=True,
+            expires=authentication_info["expires_at"],
+        )
         return response
 
     async def get_user_dropbox_client(
