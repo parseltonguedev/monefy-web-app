@@ -33,6 +33,8 @@ using an Authorization header and through secure cookies
 from datetime import datetime
 from functools import wraps
 from typing import Any, Callable, Optional
+from http import HTTPStatus
+import time
 
 import jwt
 from dropbox.oauth import OAuth2FlowResult
@@ -87,7 +89,7 @@ class Authenticator:
             logger.info("got user info for auth")
             return await self.get_authenticated_response(request, auth_user_info)
         logger.warning("get dropbox authentication route without required parameters")
-        return redirect("/")
+        return await self.render_homepage_for_user_or_guest(request)
 
     async def get_authenticated_response(
         self, request: Request, user_auth_info: OAuth2FlowResult
@@ -108,7 +110,7 @@ class Authenticator:
             jwt_token = self.get_encoded_jwt_token(
                 request, user_info.uuid, user_info.username, user_info.photo, auth_info
             )
-            response = await self.render_authenticated_response(
+            response = self.render_authenticated_response(
                 request, auth_info, jwt_token
             )
             return response
@@ -125,7 +127,7 @@ class Authenticator:
             auth_info,
         )
         await self.create_user(request, dropbox_user_info, auth_info)
-        response = await self.render_authenticated_response(
+        response = self.render_authenticated_response(
             request, auth_info, jwt_token
         )
         return response
@@ -206,25 +208,33 @@ class Authenticator:
             await session.execute(update_user_access_token_statement)
 
     @staticmethod
-    async def render_authenticated_response(
+    def render_authenticated_response(
         request: Request, authentication_info: dict[Any, Any], jwt_token: str
     ) -> HTTPResponse:
         """Render response after authentication"""
-        response = await render(
-            "auth.html",
-            content_type="text/html; charset=utf-8",
-            context={"message": "success auth with web app"},
-        )
-        set_cookie(
-            response=response,
-            domain="127.0.0.1" if request.app.config.get("LOCAL") else "monefied.xyz",
-            key="jwt_token",
-            value=jwt_token,
-            httponly=True,
-            samesite="strict",
-            secure=True,
-            expires=authentication_info["expires_at"],
-        )
+        response = redirect("/", status=HTTPStatus.SEE_OTHER)
+        response.cookies["jwt_token"] = jwt_token
+        response.cookies["jwt_token"]["httponly"] = True
+        response.cookies["jwt_token"]["path"] = "/"
+        response.cookies["jwt_token"]["secure"] = True
+        response.cookies["jwt_token"]["samesite"] = "strict"
+
+        if "127.0.0.1":
+            response.cookies["jwt_token"]["domain"] = "127.0.0.1"
+
+        if authentication_info["expires_at"]:
+            response.cookies["jwt_token"]["expires"] = authentication_info["expires_at"]
+
+        # set_cookie(
+        #     response=response,
+        #     domain="127.0.0.1" if request.app.config.get("LOCAL") else "monefied.xyz",
+        #     key="jwt_token",
+        #     value=jwt_token,
+        #     httponly=True,
+        #     samesite="strict",
+        #     secure=True,
+        #     expires=authentication_info["expires_at"],
+        # )
         return response
 
     async def get_user_dropbox_client(

@@ -73,13 +73,13 @@ services:
       - SANIC_LOCAL=${SANIC_LOCAL}
 
   nginx_server:
-    image: parseltongue/entrypoint-service:latest
-    build:
-      context: nginx
-      dockerfile: Dockerfile
+    image: nginx:latest
+    platform: linux/amd64
     ports:
       - "80:80"
       - "433:433"
+    volumes:
+      - ./nginx/monefied.conf:/etc/nginx/conf.d/default.conf
     restart: always
     depends_on:
       - ui_service

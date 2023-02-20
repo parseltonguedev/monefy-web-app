@@ -30,11 +30,12 @@ class HealthCheck(HTTPMethodView, attach=healthcheck_bp, uri="/healthcheck"):
 class HomePageView(MonefyApplicationView, attach=homepage_bp, uri="/"):
     """Home page View"""
 
-    async def get(self, request: Request) -> HTTPResponse:
+    def get(self, request: Request) -> HTTPResponse:
         """Homepage route for guest and authenticated user"""
-        return await self.authenticator.render_homepage_for_user_or_guest(request)
+        return self.authenticator.finish_dropbox_authentication_request(request)
+        # return await self.authenticator.render_homepage_for_user_or_guest(request)
 
-    async def post(self, request: Request) -> HTTPResponse:
+    def post(self, request: Request) -> HTTPResponse:
         """Post request route for Dropbox authentication process"""
         return redirect("/auth", status=HTTPStatus.TEMPORARY_REDIRECT)
 
@@ -43,10 +44,6 @@ class DropboxAuthentication(
     MonefyApplicationView, attach=dropbox_authentication_bp, uri="/auth"
 ):
     """View for Dropbox Authentication"""
-
-    async def get(self, request: Request) -> HTTPResponse:
-        """Finish dropbox authentication process after redirect"""
-        return await self.authenticator.finish_dropbox_authentication_request(request)
 
     async def post(self, request: Request) -> HTTPResponse:
         """Start Dropbox authentication process after post request"""

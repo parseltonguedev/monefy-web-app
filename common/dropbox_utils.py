@@ -196,9 +196,9 @@ class DropboxAuthenticator:
     app_key = os.environ.get("DROPBOX_APP_KEY")
     app_secret = os.environ.get("DROPBOX_APP_SECRET")
     app_uri = (
-        "http://127.0.0.1/auth"
+        "http://127.0.0.1/"
         if os.environ.get("SANIC_LOCAL")
-        else "https://monefied.xyz/auth"
+        else "https://monefied.xyz/"
     )
 
     def __init__(self) -> None:
